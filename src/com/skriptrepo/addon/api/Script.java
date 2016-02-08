@@ -73,7 +73,7 @@ public class Script {
 	}
 	
 	public Boolean isReady() {
-		if(getFile() != null && getUpdateURL() != null && getLocalVersion() != null && getVersionURL() != null && getUpdateURL() != null) {
+		if(getFile() != null && getUpdateURL() != null && getLocalVersion() != null && getVersionURL() != null && getUpdateURL() != null && getName() != null) {
 			return true;
 		} else {
 			return false;
@@ -98,10 +98,21 @@ public class Script {
 		}
 		return false;
 	}
-
 	
-	public void updateLocalVersion() {
-		//TODO: get content from URL
+	public Boolean fetchOnlineVersion() {
+		try { 
+			URLConnection yc = getVersionURL().openConnection(); 
+			BufferedReader in = new BufferedReader(new InputStreamReader(yc.getInputStream())); 
+			String inputLine; 
+			while ((inputLine = in.readLine()) != null) { 
+				this.onlineVersion = Double.parseDouble(inputLine);
+			}
+			in.close();
+			return true;
+		} catch (Exception e) { 
+			e.printStackTrace(); 
+		}
+		return false;
 	}
 	
 }

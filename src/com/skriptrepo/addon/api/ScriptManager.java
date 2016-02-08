@@ -1,14 +1,25 @@
 package com.skriptrepo.addon.api;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.lang.reflect.Method;
 import java.net.URL;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
 import java.util.List;
 
+import ch.njol.skript.ScriptLoader;
+
 import com.skriptrepo.addon.SkriptRepo;
+import com.skriptrepo.addon.util.Encryption;
+import com.skriptrepo.addon.util.Enums.SRFileTypes;
 
 public class ScriptManager {
 
@@ -34,6 +45,118 @@ public class ScriptManager {
 	public Boolean isCached() {
 		return true;
 	}
+	
+	public void encrypt(Script s) {
+		Encryption en = new Encryption();
+		String encrypted = null;
+		File writeTo = new File(SkriptRepo.instance.getDataFolder(), s.getFile() + ".sre");
+		try {
+			FileReader fileReader = new FileReader(s.getFile());
+			BufferedReader bufferedReader = new BufferedReader(fileReader);
+	        String line = null;
+	        Writer writer = null;
+			while((line = bufferedReader.readLine()) != null) {
+				encrypted = Encryption.bytesToHex(en.encrypt(line));
+				writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(writeTo), "utf-8"));
+				writer.write(encrypted);
+			}
+		    writer.close();
+		    bufferedReader.close();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		if(encrypted == null) {
+			return;
+		}
+	}
+	
+	public static File decrypt(File f) {
+		Encryption en = new Encryption();
+		String decrypted = null;
+		File writeTo = new File(SkriptRepo.instance.getDataFolder(), f.getName() + ".sr");
+		try {
+			FileReader fileReader = new FileReader(f);
+			BufferedReader bufferedReader = new BufferedReader(fileReader);
+	        String line = null;
+	        Writer writer = null;
+			while((line = bufferedReader.readLine()) != null) {
+				decrypted = new String(en.decrypt(line));
+				writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(writeTo), "utf-8"));
+				writer.write(decrypted);
+			}
+		    writer.close();
+		    bufferedReader.close();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return writeTo;
+		
+	}
+	
+	public static void loadURL(URL url, SRFileTypes fileType) {
+        File f = new File(SkriptRepo.instance.getDataFolder(), "tmp.sr");     
+        File toLoad = null;
+        try {
+            ReadableByteChannel rbc = Channels.newChannel(url.openStream());
+            FileOutputStream fos = new FileOutputStream(f);
+            fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
+            fos.close();
+            if(fileType == SRFileTypes.EONLINE) {
+            	toLoad = decrypt(f);
+            } else {
+            	toLoad = f;
+            }
+            loadScript(toLoad);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        while (f.exists()) f.delete();
+        while (toLoad.exists()) toLoad.delete();
+    }
+	
+	public static void loadScript(File f) {
+        try {
+            Class<?> cs = ScriptLoader.class;
+            Method method = cs.getDeclaredMethod("loadScript", File.class);
+            method.setAccessible(true);
+            method.invoke(null, f);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+	}
+	
+	public static void unloadScript(File f) {
+        try {
+            Class<?> cs = ScriptLoader.class;
+            Method method = cs.getDeclaredMethod("unloadScript", File.class);
+            method.setAccessible(true);
+            method.invoke(null, f);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+	}
+	
+    public static void updateScript(Script s) {
+    	if(s.isReady()) {
+    		if(s.getOnlineVersion() > s.getLocalVersion()) {
+    			String fName = s.getFile().getName();
+    			unloadScript(s.getFile());
+    			s.getFile().delete();
+    			File writeTo = new File("/plugins/Skript/scripts/" + fName);
+    			try {
+    				ReadableByteChannel rbc = Channels.newChannel(s.getUpdateURL().openStream());
+    				FileOutputStream fos = new FileOutputStream(writeTo);
+    				fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
+    				fos.close();
+    			} catch (IOException e) {
+    				e.printStackTrace();
+    			}
+    			if(writeTo != null) {
+    				loadScript(writeTo);
+    			}
+    		}
+    	}
+    }
 	
 	public Boolean setData(Script s) {
 		FileReader fileReader = null;
